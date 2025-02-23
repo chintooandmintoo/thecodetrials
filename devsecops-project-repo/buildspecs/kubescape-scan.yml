@@ -1,0 +1,11 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+  build:
+    commands:
+      - kubescape scan framework nsa --format json --output kubescape-results.json
+  post_build:
+    commands:
+      - aws s3 cp kubescape-results.json s3://${RESULTS_BUCKET}/kubescape/$(date +%Y-%m-%d-%H-%M)/scan.json

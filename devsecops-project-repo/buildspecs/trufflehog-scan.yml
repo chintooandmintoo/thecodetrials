@@ -1,0 +1,13 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      - pip install trufflehog3
+  build:
+    commands:
+      - trufflehog3 --json . > trufflehog-results.json
+  post_build:
+    commands:
+      - aws s3 cp trufflehog-results.json s3://${RESULTS_BUCKET}/trufflehog/$(date +%Y-%m-%d-%H-%M)/scan.json

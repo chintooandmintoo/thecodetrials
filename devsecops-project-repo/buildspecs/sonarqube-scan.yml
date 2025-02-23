@@ -1,0 +1,22 @@
+version: 0.2
+env:
+  parameter-store:
+    SONAR_TOKEN: "/devsecops/sonarqube/token"
+    SONAR_HOST: "/devsecops/sonarqube/host"
+phases:
+  install:
+    runtime-versions:
+      java: corretto11
+    commands:
+      - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
+      - unzip sonar-scanner-cli-4.7.0.2747-linux.zip
+  build:
+    commands:
+      - ./sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner \
+          -Dsonar.projectKey=${PROJECT_KEY} \
+          -Dsonar.sources=. \
+          -Dsonar.host.url=${SONAR_HOST} \
+          -Dsonar.login=${SONAR_TOKEN}
+  post_build:
+    commands:
+      - aws s3 cp .scannerwork/report-task.txt s3://${RESULTS_BUCKET}/sonarqube/$(date +%Y-%m-%d-%H-%M)/report.txt

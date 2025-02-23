@@ -1,0 +1,14 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      java: corretto11
+    commands:
+      - wget https://github.com/jeremylong/DependencyCheck/releases/download/v6.5.3/dependency-check-6.5.3-release.zip
+      - unzip dependency-check-6.5.3-release.zip
+  build:
+    commands:
+      - ./dependency-check/bin/dependency-check.sh --scan . --format JSON --out dependency-check-report.json
+  post_build:
+    commands:
+      - aws s3 cp dependency-check-report.json s3://${RESULTS_BUCKET}/dependency-check/$(date +%Y-%m-%d-%H-%M)/report.json

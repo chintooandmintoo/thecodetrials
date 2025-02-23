@@ -1,0 +1,16 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+  pre_build:
+    commands:
+      - echo "Scanning Dockerfile..."
+  build:
+    commands:
+      - trivy config . --format json -o trivy-config-results.json
+      - trivy fs . --format json -o trivy-fs-results.json
+  post_build:
+    commands:
+      - aws s3 cp trivy-config-results.json s3://${RESULTS_BUCKET}/trivy/$(date +%Y-%m-%d-%H-%M)/config-scan.json
+      - aws s3 cp trivy-fs-results.json s3://${RESULTS_BUCKET}/trivy/$(date +%Y-%m-%d-%H-%M)/fs-scan.json
