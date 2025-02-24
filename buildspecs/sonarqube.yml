@@ -18,34 +18,14 @@ phases:
 
   build:
     commands:
-      - |
-        echo "Running SonarQube analysis..."
-        sonar-scanner \
-          -Dsonar.projectKey=$SONAR_PROJECT_KEY \
-          -Dsonar.sources=. \
-          -Dsonar.host.url=$SONARQUBE_HOST \
-          -Dsonar.login=$SONARQUBE_TOKEN \
-          -Dsonar.sourceEncoding=UTF-8 \
-          -Dsonar.java.binaries=. \
-          -Dsonar.python.version=3 \
-          -Dsonar.exclusions=**/node_modules/**,**/*.test.js,**/*.spec.js \
-          -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js || true
+      - echo "Running SonarQube analysis..."
+      - sonar-scanner -Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.sources=. -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN -Dsonar.sourceEncoding=UTF-8 -Dsonar.java.binaries=. -Dsonar.python.version=3 -Dsonar.exclusions=**/node_modules/**,**/*.test.js,**/*.spec.js -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js || true
       - ls -la
 
   post_build:
     commands:
-      - |
-        TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
-        if [ -f ".scannerwork/report-task.txt" ]; then
-          echo "SonarQube analysis completed successfully"
-          aws s3 cp .scannerwork/report-task.txt s3://${RESULTS_BUCKET}/sonarqube/${TIMESTAMP}/report-task.txt
-        else
-          echo "SonarQube analysis failed or no results found, creating empty report"
-          echo "projectKey=$SONAR_PROJECT_KEY" > sonarqube-report.txt
-          echo "serverUrl=$SONARQUBE_HOST" >> sonarqube-report.txt
-          echo "status=SUCCESS" >> sonarqube-report.txt
-          aws s3 cp sonarqube-report.txt s3://${RESULTS_BUCKET}/sonarqube/${TIMESTAMP}/report.txt
-        fi
+      - TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+      - if [ -f ".scannerwork/report-task.txt" ]; then echo "SonarQube analysis completed successfully"; aws s3 cp .scannerwork/report-task.txt s3://${RESULTS_BUCKET}/sonarqube/${TIMESTAMP}/report-task.txt; else echo "SonarQube analysis failed or no results found, creating empty report"; echo "projectKey=$SONAR_PROJECT_KEY" > sonarqube-report.txt; echo "serverUrl=$SONARQUBE_HOST" >> sonarqube-report.txt; echo "status=SUCCESS" >> sonarqube-report.txt; aws s3 cp sonarqube-report.txt s3://${RESULTS_BUCKET}/sonarqube/${TIMESTAMP}/report.txt; fi
 
 artifacts:
   files:
