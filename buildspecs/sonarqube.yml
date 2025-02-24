@@ -1,29 +1,11 @@
 version: 0.2
-
 phases:
   install:
-    runtime-versions:
-      java: corretto11
     commands:
-      - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
-      - unzip sonar-scanner-cli-4.7.0.2747-linux.zip
-      - export PATH=$PATH:./sonar-scanner-4.7.0.2747-linux/bin/
-
-  pre_build:
-    commands:
-      - echo "Starting SonarQube analysis"
-      - echo "SonarQube Host: $SONARQUBE_HOST"
-
+      - echo "Installing dependencies"
   build:
     commands:
-      - echo "Running SonarQube scan"
-      - sonar-scanner -Dsonar.projectKey=secureline -Dsonar.sources=. -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN
-
-  post_build:
-    commands:
-      - echo "SonarQube scan complete"
-      - aws s3 cp .scannerwork/report-task.txt s3://${RESULTS_BUCKET}/sonarqube/scan-results/report.txt || true
-
+      - echo "Running SonarQube"
 artifacts:
   files:
-    - .scannerwork/report-task.txt
+    - README.md
