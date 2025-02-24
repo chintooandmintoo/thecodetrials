@@ -8,7 +8,8 @@ phases:
       - echo "Installing SonarQube Scanner"
       - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
       - unzip sonar-scanner-cli-4.7.0.2747-linux.zip
-      - export PATH=$PATH:$(pwd)/sonar-scanner-4.7.0.2747-linux/bin
+      - echo 'export PATH=$PATH:$(pwd)/sonar-scanner-4.7.0.2747-linux/bin' >> ~/.bashrc
+      - source ~/.bashrc
 
   pre_build:
     commands:
@@ -18,7 +19,7 @@ phases:
   build:
     commands:
       - echo "Running SonarQube scan"
-      - echo "Creating simple properties file"
+      - echo "Creating sonar-project.properties file"
       - echo "sonar.projectKey=devsecops-sonar" > sonar-project.properties
       - echo "sonar.projectName=DevSecOps Project" >> sonar-project.properties
       - echo "sonar.sources=." >> sonar-project.properties
