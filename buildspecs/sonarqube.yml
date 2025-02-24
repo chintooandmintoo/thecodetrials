@@ -1,3 +1,5 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
 version: 0.2
 
 phases:
@@ -6,40 +8,67 @@ phases:
       java: corretto11
     commands:
       - echo "Installing SonarQube Scanner"
+    finally:
+      - echo "This always runs even if the installation command fails"
+      
+  pre_build:
+    commands:
       - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
       - unzip sonar-scanner-cli-4.7.0.2747-linux.zip
       - mv sonar-scanner-4.7.0.2747-linux /opt/sonar-scanner
       - chmod -R 775 /opt/sonar-scanner
-      - echo "Installation complete"
-
-  pre_build:
-    commands:
-      - echo "Preparing for build"
-      - echo "SonarQube Host: $SONARQUBE_HOST"
-      - echo "Starting Maven build process"
-      - mvn clean compile
+      - echo "Stage pre_build completed"
 
   build:
     commands:
-      - echo "Creating sonar-project.properties"
+      - echo "Running SonarQube scan"
+      - echo "Running SonarQube scan"
+      - echo "Creating sonar-project.properties file"
       - echo "sonar.projectKey=devsecops-sonar" > sonar-project.properties
-      - echo "sonar.projectName=WebGoat" >> sonar-project.properties
-      - echo "sonar.sources=src/main/java" >> sonar-project.properties
+      - echo "sonar.projectName=DevSecOps Project" >> sonar-project.properties
+	  - echo "sonar.sources=src/main/java" >> sonar-project.properties
       - echo "sonar.java.binaries=target/classes" >> sonar-project.properties
       - echo "sonar.host.url=$SONARQUBE_HOST" >> sonar-project.properties
       - echo "sonar.login=$SONARQUBE_TOKEN" >> sonar-project.properties
-      - echo "sonar-project.properties created"
-      - echo "Running SonarQube scan"
-      - /opt/sonar-scanner/bin/sonar-scanner -X > sonarqube_scanreport.json || true
+      - cat sonar-project.properties
+      - cd $CODEBUILD_SRC_DIR
+      - /opt/sonar-scanner/bin/sonar-scanner > sonarqube_scanreport.json
+      - echo "Build stage completed"  
+      - cd $CODEBUILD_SRC_DIR
+      - /opt/sonar-scanner/bin/sonar-scanner -Dsonar.sources=. -Dproject.settings=sonar-project.properties -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN > sonarqube_scanreport.json
+      - echo "Build stage completed"
 
   post_build:
     commands:
       - echo "Uploading scan results"
-      - sonar_link=$(grep -oP "you can browse http://[^, ]+" sonarqube_scanreport.json || echo "Link not found")
-      - echo "SonarQube link: $sonar_link"
-      - aws s3 cp sonarqube_scanreport.json s3://${RESULTS_BUCKET}/sonarqube/ || true
+      - sonar_link=$(cat sonarqube_scanreport.json | grep -oP "you can browse http://[^, ]+")
+      - sonar_task_id=$(cat sonarqube_scanreport.json | grep -oP "task\?id=[^ ]+" | cut -d'=' -f2)
+      - |
+        echo "Checking SonarQube background task status"
+        stat="PENDING"
+        while [ "$stat" != "SUCCESS" ]; do
+          if [[ "$stat" == "FAILED" || "$stat" == "CANCELLED" ]]; then
+            echo "SonarQube task $sonar_task_id failed"
+            exit 1
+          fi
+          stat=$(curl -u $SONARQUBE_TOKEN $SONARQUBE_HOST/api/ce/task?id=$sonar_task_id | jq -r '.task.status')
+          sleep 5
+        done
+      - echo "SonarQube background task completed successfully"
+      - sonar_analysis_id=$(curl -u $SONARQUBE_TOKEN $SONARQUBE_HOST/api/ce/task?id=$sonar_task_id | jq -r '.task.analysisId')
+      - quality_status=$(curl -u $SONARQUBE_TOKEN $SONARQUBE_HOST/api/qualitygates/project_status?analysisId=$sonar_analysis_id | jq -r '.projectStatus.status')
+      - |
+        if [[ "$quality_status" == "ERROR" || "$quality_status" == "WARN" ]]; then
+          echo "SonarQube quality gate failed: $quality_status"
+          exit 1
+        elif [[ "$quality_status" == "OK" ]]; then
+          echo "SonarQube quality gate passed: $quality_status"
+        else
+          echo "Unexpected SonarQube quality status: $quality_status"
+          exit 1
+        fi
 
 artifacts:
+  type: zip
   files:
-    - sonarqube_scanreport.json
-    - sonar-project.properties
+    - '**/*'
