@@ -4,7 +4,6 @@ phases:
   install:
     runtime-versions:
       java: corretto11
-      nodejs: 16
     commands:
       - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
       - unzip sonar-scanner-cli-4.7.0.2747-linux.zip
@@ -12,23 +11,19 @@ phases:
 
   pre_build:
     commands:
-      - echo "Starting SonarQube analysis..."
+      - echo "Starting SonarQube analysis"
       - echo "SonarQube Host: $SONARQUBE_HOST"
-      - echo "Project Key: $SONAR_PROJECT_KEY"
 
   build:
     commands:
-      - echo "Running SonarQube analysis..."
-      - sonar-scanner -Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.sources=. -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN -Dsonar.sourceEncoding=UTF-8 -Dsonar.java.binaries=. -Dsonar.python.version=3 -Dsonar.exclusions=**/node_modules/**,**/*.test.js,**/*.spec.js -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js || true
-      - ls -la
+      - echo "Running SonarQube scan"
+      - sonar-scanner -Dsonar.projectKey=secureline -Dsonar.sources=. -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN
 
   post_build:
     commands:
-      - TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
-      - if [ -f ".scannerwork/report-task.txt" ]; then echo "SonarQube analysis completed successfully"; aws s3 cp .scannerwork/report-task.txt s3://${RESULTS_BUCKET}/sonarqube/${TIMESTAMP}/report-task.txt; else echo "SonarQube analysis failed or no results found, creating empty report"; echo "projectKey=$SONAR_PROJECT_KEY" > sonarqube-report.txt; echo "serverUrl=$SONARQUBE_HOST" >> sonarqube-report.txt; echo "status=SUCCESS" >> sonarqube-report.txt; aws s3 cp sonarqube-report.txt s3://${RESULTS_BUCKET}/sonarqube/${TIMESTAMP}/report.txt; fi
+      - echo "SonarQube scan complete"
+      - aws s3 cp .scannerwork/report-task.txt s3://${RESULTS_BUCKET}/sonarqube/scan-results/report.txt || true
 
 artifacts:
   files:
     - .scannerwork/report-task.txt
-    - sonarqube-report.txt
-  discard-paths: no
