@@ -26,7 +26,7 @@ phases:
       - echo "Creating sonar-project.properties file"
       - echo "sonar.projectKey=devsecops-sonar" > sonar-project.properties
       - echo "sonar.projectName=DevSecOps Project" >> sonar-project.properties
-	  - echo "sonar.sources=src/main/java" >> sonar-project.properties
+      - echo "sonar.sources=src/main/java" >> sonar-project.properties
       - echo "sonar.java.binaries=target/classes" >> sonar-project.properties
       - echo "sonar.host.url=$SONARQUBE_HOST" >> sonar-project.properties
       - echo "sonar.login=$SONARQUBE_TOKEN" >> sonar-project.properties
