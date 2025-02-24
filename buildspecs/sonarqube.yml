@@ -37,12 +37,12 @@ phases:
       - cat sonar-project.properties
       - cd $CODEBUILD_SRC_DIR
       - ls -al $CODEBUILD_SRC_DIR
-      - /opt/sonar-scanner/bin/sonar-scanner > sonarqube_scanreport.json
       - echo "Build stage completed"
       - echo "Compiling Java files"
       - cd WebGoat
       - mvn clean compile
       - ls -alR target/classes || echo "Directory not found!"
+      - /opt/sonar-scanner/bin/sonar-scanner > sonarqube_scanreport.json
       - echo "Running SonarQube scan"
       - /opt/sonar-scanner/bin/sonar-scanner -X  -Dsonar.sources=. -Dproject.settings=sonar-project.properties -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN > sonarqube_scanreport.json
       - echo "Build stage completed"
