@@ -35,7 +35,7 @@ phases:
       - /opt/sonar-scanner/bin/sonar-scanner > sonarqube_scanreport.json
       - echo "Build stage completed"  
       - cd $CODEBUILD_SRC_DIR
-      - /opt/sonar-scanner/bin/sonar-scanner -Dsonar.sources=. -Dproject.settings=sonar-project.properties -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN > sonarqube_scanreport.json
+      - /opt/sonar-scanner/bin/sonar-scanner -X  -Dsonar.sources=. -Dproject.settings=sonar-project.properties -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN > sonarqube_scanreport.json
       - echo "Build stage completed"
 
   post_build:
