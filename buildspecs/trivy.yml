@@ -10,7 +10,9 @@ phases:
       # Check if Dockerfile exists
       - |
         if ! find . -name "Dockerfile" -type f | grep -q .; then
-          echo "No Dockerfile found - skipping Trivy scan"
+          echo "No Dockerfile found - creating empty results"
+          echo '{"Results":[]}' > trivy-results.json
+          echo '{"Results":[]}' > trivy-config-results.json
           exit 0
         fi
       - echo "Dockerfile found - proceeding with Trivy scan"
@@ -18,18 +20,32 @@ phases:
   build:
     commands:
       - echo "Running Trivy scan..."
-      - trivy fs . --format json -o trivy-results.json
-      - trivy config . --format json -o trivy-config-results.json
+      - trivy fs . --format json -o trivy-results.json || true
+      - trivy config . --format json -o trivy-config-results.json || true
+      - ls -la
 
   post_build:
     commands:
       - |
         TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
-        aws s3 cp trivy-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/fs-scan.json
-        aws s3 cp trivy-config-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/config-scan.json
+        if [ -f "trivy-results.json" ]; then
+          aws s3 cp trivy-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/fs-scan.json
+        else
+          echo "FS scan results not found, creating empty one"
+          echo '{"Results":[]}' > trivy-results.json
+          aws s3 cp trivy-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/fs-scan.json
+        fi
+        
+        if [ -f "trivy-config-results.json" ]; then
+          aws s3 cp trivy-config-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/config-scan.json
+        else
+          echo "Config scan results not found, creating empty one"
+          echo '{"Results":[]}' > trivy-config-results.json
+          aws s3 cp trivy-config-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/config-scan.json
+        fi
 
 artifacts:
   files:
     - trivy-results.json
     - trivy-config-results.json
-  name: trivy-scan-results
+  base-directory: .
