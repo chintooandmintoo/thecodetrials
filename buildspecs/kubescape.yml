@@ -1,0 +1,34 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+
+  pre_build:
+    commands:
+      # Check if any Kubernetes manifests or Helm charts exist
+      - |
+        if ! find . -type f -regex ".*\.\(yaml\|yml\)" -exec grep -l "kind:" {} \; | grep -q .; then
+          if ! find . -type f -name "Chart.yaml" | grep -q .; then
+            echo "No Kubernetes manifests or Helm charts found - skipping Kubescape scan"
+            exit 0
+          fi
+        fi
+      - echo "Kubernetes files found - proceeding with Kubescape scan"
+
+  build:
+    commands:
+      - echo "Running Kubescape scan..."
+      - kubescape scan framework nsa --format json --output kubescape-results.json
+
+  post_build:
+    commands:
+      - |
+        TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+        aws s3 cp kubescape-results.json s3://${RESULTS_BUCKET}/kubescape/${TIMESTAMP}/scan.json
+
+artifacts:
+  files:
+    - kubescape-results.json
+  name: kubescape-scan-results

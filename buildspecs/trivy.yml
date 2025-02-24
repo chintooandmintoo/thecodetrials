@@ -1,0 +1,35 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+  pre_build:
+    commands:
+      # Check if Dockerfile exists
+      - |
+        if ! find . -name "Dockerfile" -type f | grep -q .; then
+          echo "No Dockerfile found - skipping Trivy scan"
+          exit 0
+        fi
+      - echo "Dockerfile found - proceeding with Trivy scan"
+
+  build:
+    commands:
+      - echo "Running Trivy scan..."
+      - trivy fs . --format json -o trivy-results.json
+      - trivy config . --format json -o trivy-config-results.json
+
+  post_build:
+    commands:
+      - |
+        TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+        aws s3 cp trivy-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/fs-scan.json
+        aws s3 cp trivy-config-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/config-scan.json
+
+artifacts:
+  files:
+    - trivy-results.json
+    - trivy-config-results.json
+  name: trivy-scan-results

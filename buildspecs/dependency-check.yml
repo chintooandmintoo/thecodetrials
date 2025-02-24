@@ -1,0 +1,53 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto11
+    commands:
+      - wget https://github.com/jeremylong/DependencyCheck/releases/download/v6.5.3/dependency-check-6.5.3-release.zip
+      - unzip dependency-check-6.5.3-release.zip
+      - chmod +x dependency-check/bin/dependency-check.sh
+
+  pre_build:
+    commands:
+      - echo "Starting Dependency Check scan..."
+      - TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+
+  build:
+    commands:
+      - |
+        echo "Running Dependency Check..."
+        ./dependency-check/bin/dependency-check.sh \
+          --scan . \
+          --format JSON \
+          --format HTML \
+          --suppressionFile suppressions.xml \
+          --failOnCVSS 7 \
+          --out .
+
+  post_build:
+    commands:
+      - |
+        TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+        aws s3 cp dependency-check-report.json s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/report.json
+        aws s3 cp dependency-check-report.html s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/report.html
+      - |
+        if [ -f dependency-check-report.json ]; then
+          HIGH_VULNS=$(cat dependency-check-report.json | jq -r '.dependencies[] | select(.vulnerabilities != null) | .vulnerabilities[] | select(.cvssv3_baseScore >= 7) | .name' | wc -l)
+          if [ $HIGH_VULNS -gt 0 ]; then
+            echo "Found ${HIGH_VULNS} high severity vulnerabilities"
+            echo "Check the detailed report in S3 bucket"
+          fi
+        fi
+
+artifacts:
+  files:
+    - dependency-check-report.json
+    - dependency-check-report.html
+  name: dependency-check-results
+
+cache:
+  paths:
+    - '/root/.m2/**/*'
+    - 'dependency-check/data/**/*'
