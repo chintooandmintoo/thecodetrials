@@ -8,6 +8,10 @@ phases:
       java: corretto11
     commands:
       - echo "Installing SonarQube Scanner"
+      - echo "Installing Maven"
+      - yum update -y
+      - yum install -y maven
+      - mvn --version
     finally:
       - echo "This always runs even if the installation command fails"
       
@@ -38,6 +42,7 @@ phases:
       - echo "Compiling Java files"
       - cd WebGoat
       - mvn clean compile
+      - ls -alR target/classes || echo "Directory not found!"
       - echo "Running SonarQube scan"
       - /opt/sonar-scanner/bin/sonar-scanner -X  -Dsonar.sources=. -Dproject.settings=sonar-project.properties -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN > sonarqube_scanreport.json
       - echo "Build stage completed"
