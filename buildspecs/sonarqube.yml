@@ -15,7 +15,7 @@ phases:
     commands:
       - echo "Preparing for SonarQube scan"
       - echo "SonarQube Host: $SONARQUBE_HOST"
-
+      - echo "SonarQube Project" $projectKey
   build:
     commands:
       - echo "Running SonarQube scan"
