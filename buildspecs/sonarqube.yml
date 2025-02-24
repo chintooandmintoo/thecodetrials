@@ -46,7 +46,8 @@ phases:
   post_build:
     commands:
       - echo "Uploading scan results"
-      - sonar_link=$(cat sonarqube_scanreport.json | grep -oP "you can browse http://[^, ]+")
+      - cat sonarqube_scanreport.json
+      - sonar_link=$(cat sonarqube_scanreport.json | grep -oP "https?://[^, ]+" | head -n 1 || echo "URL not found")
       - sonar_task_id=$(cat sonarqube_scanreport.json | grep -oP "task\?id=[^ ]+" | cut -d'=' -f2)
       - |
         echo "Checking SonarQube background task status"
