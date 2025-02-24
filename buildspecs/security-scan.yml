@@ -1,0 +1,59 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      # Install security scanning tools
+      - pip install trufflehog3
+      - pip install bandit
+      - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      - wget https://github.com/jeremylong/DependencyCheck/releases/download/v6.5.3/dependency-check-6.5.3-release.zip
+      - unzip dependency-check-6.5.3-release.zip
+
+  pre_build:
+    commands:
+      - echo "Starting security scans"
+      - TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+
+  build:
+    commands:
+      # Trufflehog scan for secrets
+      - echo "Running TruffleHog scan..."
+      - trufflehog3 --json . > trufflehog-results.json || true
+
+      # Bandit scan for Python security issues
+      - echo "Running Bandit scan..."
+      - bandit -r . -f json -o bandit-results.json || true
+
+      # Trivy scan for vulnerabilities
+      - echo "Running Trivy scan..."
+      - trivy fs . --format json -o trivy-results.json || true
+
+      # Dependency Check for known vulnerabilities
+      - echo "Running Dependency Check..."
+      - ./dependency-check/bin/dependency-check.sh --scan . --format JSON --out dependency-check-results.json || true
+
+  post_build:
+    commands:
+      - echo "Uploading scan results to S3..."
+      - |
+        TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+        aws s3 cp trufflehog-results.json s3://${RESULTS_BUCKET}/trufflehog/${TIMESTAMP}/results.json
+        aws s3 cp bandit-results.json s3://${RESULTS_BUCKET}/bandit/${TIMESTAMP}/results.json
+        aws s3 cp trivy-results.json s3://${RESULTS_BUCKET}/trivy/${TIMESTAMP}/results.json
+        aws s3 cp dependency-check-results.json s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/results.json
+
+artifacts:
+  files:
+    - trufflehog-results.json
+    - bandit-results.json
+    - trivy-results.json
+    - dependency-check-results.json
+  name: security-scan-results-$(date +%Y-%m-%d)
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
+    - '/root/.cache/trivy/**/*'
