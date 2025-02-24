@@ -7,11 +7,6 @@ phases:
     runtime-versions:
       java: corretto11
     commands:
-      - echo "Installing Maven 3.6.3"
-      - wget https://downloads.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz
-      - tar -xvf apache-maven-3.9.9-bin.tar.gz
-      - mv apache-maven-3.9.9 /usr/local/maven
-      - ln -s /usr/local/maven/bin/mvn /usr/bin/mvn
       - mvn --version
     finally:
       - echo "This always runs even if the installation command fails"
