@@ -27,14 +27,18 @@ phases:
       - echo "sonar.projectKey=devsecops-sonar" > sonar-project.properties
       - echo "sonar.projectName=DevSecOps Project" >> sonar-project.properties
       - echo "sonar.sources=WebGoat/src/main/java" >> sonar-project.properties
-      - echo "sonar.java.binaries=target/classes" >> sonar-project.properties
+      - echo "sonar.java.binaries=WebGoat/target/classes" >> sonar-project.properties
       - echo "sonar.host.url=$SONARQUBE_HOST" >> sonar-project.properties
       - echo "sonar.login=$SONARQUBE_TOKEN" >> sonar-project.properties
       - cat sonar-project.properties
       - cd $CODEBUILD_SRC_DIR
+      - ls -al $CODEBUILD_SRC_DIR
       - /opt/sonar-scanner/bin/sonar-scanner > sonarqube_scanreport.json
-      - echo "Build stage completed"  
-      - cd $CODEBUILD_SRC_DIR
+      - echo "Build stage completed"
+      - echo "Compiling Java files"
+      - cd WebGoat
+      - mvn clean compile
+      - echo "Running SonarQube scan"
       - /opt/sonar-scanner/bin/sonar-scanner -X  -Dsonar.sources=. -Dproject.settings=sonar-project.properties -Dsonar.host.url=$SONARQUBE_HOST -Dsonar.login=$SONARQUBE_TOKEN > sonarqube_scanreport.json
       - echo "Build stage completed"
 
