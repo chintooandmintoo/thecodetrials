@@ -1,0 +1,82 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Retrieving SSH private keys and configuration from AWS Secrets Manager"
+      - JUMP_HOST_PrivateKey=$(aws ssm get-parameter --name /devsecops/JUMP_HOST_PrivateKey --with-decryption --query "Parameter.Value" --output text)
+      - REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER_PrivateKey --with-decryption --query "Parameter.Value" --output text)
+
+      - echo "Retrieving Jump Host, Remote Server, and S3 bucket from SSM Parameter Store"
+      - JUMP_HOST=$(aws ssm get-parameter --name /devsecops/JUMP_HOST --with-decryption --query "Parameter.Value" --output text)
+      - REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER --with-decryption --query "Parameter.Value" --output text)
+      - ScanResultBucket=$(aws ssm get-parameter --name /devsecops/s3/results-bucket --with-decryption --query "Parameter.Value" --output text)
+      - SSH_CONFIG=$(aws ssm get-parameter --name /devsecops/SSH_CONFIG --with-decryption --query "Parameter.Value" --output text)
+
+      - echo "Configuring SSH keys and permissions"
+      - mkdir -p ~/.ssh
+      - echo "$JUMP_HOST_PrivateKey" > ~/.ssh/JHP_id_rsa
+      - echo "$REMOTE_SERVER_PrivateKey" > ~/.ssh/RSP_id_rsa
+      - echo "$SSH_CONFIG" >> ~/.ssh/config
+      - chmod 600 ~/.ssh/JHP_id_rsa
+      - chmod 600 ~/.ssh/RSP_id_rsa
+      - ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts
+      - ssh-keyscan $REMOTE_SERVER >> ~/.ssh/known_hosts
+
+      - echo "Creating reports directory"
+      - mkdir -p reports
+
+  build:
+    commands:
+      - echo "Downloading scan results from S3 bucket: $ScanResultBucket"
+
+      # Download JSON files for each tool if available
+      - for TOOL in kubescape trivy dependency-check; do
+          echo "Checking for results in $TOOL folder";
+          if aws s3 ls s3://$ScanResultBucket/$TOOL/ --recursive | grep ".json$"; then
+            echo "Downloading JSON files for $TOOL";
+            aws s3 cp s3://$ScanResultBucket/$TOOL/ ./reports/$TOOL/ --recursive --exclude "*" --include "*.json";
+          else
+            echo "No JSON files found for $TOOL";
+          fi
+        done
+
+      - echo "Transferring and renaming files to remote server via jump host"
+      - for TOOL in kubescape trivy dependency-check; do
+          if [ -d "./reports/$TOOL" ]; then
+            for FILE in ./reports/$TOOL/*.json; do
+              if [ -s "$FILE" ]; then
+                TIMESTAMP=$(basename $(dirname "$FILE"))
+                FILENAME=$(basename "$FILE")
+                NEW_FILENAME="${TOOL}_${TIMESTAMP}_${FILENAME}"
+                echo "Transferring $FILE as $NEW_FILENAME"
+                scp "$FILE" inuser2@remote-host:/home/inuser/reports/"$NEW_FILENAME"
+              else
+                echo "Skipping empty file: $FILE"
+              fi
+            done
+          fi
+        done
+
+      - echo "Executing Python parser on remote server for each tool"
+      #- for TOOL in kubescape trivy dependency-check sonarqube; do
+          #ssh -o ProxyJump=user@$JUMP_HOST -i ~/.ssh/JHP_id_rsa user@$REMOTE_SERVER "
+          #  for FILE in /home/user/reports/${TOOL}_*.json; do
+           #   if [ -f \"$FILE\" ]; then
+           #     echo \"Processing $FILE with parser.py\"
+                #python3 /home/user/parser.py --input \"$FILE\" --tool $TOOL
+            #  else
+            #    echo \"No files to process for $TOOL\"
+             # fi
+            #done"
+        #done
+
+  post_build:
+    commands:
+      - echo "Cleaning up SSH keys and known_hosts"
+      - rm -rf ~/.ssh/JHP_id_rsa
+      - rm -rf ~/.ssh/RSP_id_rsa
+      - rm -rf ~/.ssh/config
+      - rm -rf ~/.ssh/known_hosts
+      - echo "Build process completed successfully"
+
