@@ -3,80 +3,138 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - echo "Retrieving SSH private keys and configuration from AWS Secrets Manager"
-      - JUMP_HOST_PrivateKey=$(aws ssm get-parameter --name /devsecops/JUMP_HOST_PrivateKey --with-decryption --query "Parameter.Value" --output text)
-      - REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER_PrivateKey --with-decryption --query "Parameter.Value" --output text)
-
-      - echo "Retrieving Jump Host, Remote Server, and S3 bucket from SSM Parameter Store"
-      - JUMP_HOST=$(aws ssm get-parameter --name /devsecops/JUMP_HOST --with-decryption --query "Parameter.Value" --output text)
-      - REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER --with-decryption --query "Parameter.Value" --output text)
-      - ScanResultBucket=$(aws ssm get-parameter --name /devsecops/s3/results-bucket --with-decryption --query "Parameter.Value" --output text)
-      - SSH_CONFIG=$(aws ssm get-parameter --name /devsecops/SSH_CONFIG --with-decryption --query "Parameter.Value" --output text)
-
-      - echo "Configuring SSH keys and permissions"
-      - mkdir -p ~/.ssh
-      - echo "$JUMP_HOST_PrivateKey" > ~/.ssh/JHP_id_rsa
-      - echo "$REMOTE_SERVER_PrivateKey" > ~/.ssh/RSP_id_rsa
-      - echo "$SSH_CONFIG" >> ~/.ssh/config
-      - chmod 600 ~/.ssh/JHP_id_rsa
-      - chmod 600 ~/.ssh/RSP_id_rsa
-      - ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts
-      - ssh-keyscan $REMOTE_SERVER >> ~/.ssh/known_hosts
+      - echo "Starting report processing"
+      - echo "Retrieving S3 bucket from environment variable"
+      - ScanResultBucket=${RESULTS_BUCKET}
+      - echo "Using S3 bucket: $ScanResultBucket"
+      
+      # Check if we should transfer to remote server
+      - TRANSFER_TO_REMOTE=$(aws ssm get-parameter --name /devsecops/TRANSFER_TO_REMOTE --query "Parameter.Value" --output text --with-decryption || echo "false")
+      
+      - |
+        if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
+          echo "Remote transfer enabled. Setting up SSH access."
+          # Retrieve SSH private keys and configuration from AWS Secrets Manager
+          JUMP_HOST_PrivateKey=$(aws ssm get-parameter --name /devsecops/JUMP_HOST_PrivateKey --with-decryption --query "Parameter.Value" --output text)
+          REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER_PrivateKey --with-decryption --query "Parameter.Value" --output text)
+          JUMP_HOST=$(aws ssm get-parameter --name /devsecops/JUMP_HOST --with-decryption --query "Parameter.Value" --output text)
+          REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER --with-decryption --query "Parameter.Value" --output text)
+          REMOTE_USER=$(aws ssm get-parameter --name /devsecops/REMOTE_USER --with-decryption --query "Parameter.Value" --output text || echo "inuser")
+          SSH_CONFIG=$(aws ssm get-parameter --name /devsecops/SSH_CONFIG --with-decryption --query "Parameter.Value" --output text)
+          
+          # Configuring SSH keys and permissions
+          mkdir -p ~/.ssh
+          echo "$JUMP_HOST_PrivateKey" > ~/.ssh/JHP_id_rsa
+          echo "$REMOTE_SERVER_PrivateKey" > ~/.ssh/RSP_id_rsa
+          echo "$SSH_CONFIG" > ~/.ssh/config
+          chmod 600 ~/.ssh/JHP_id_rsa
+          chmod 600 ~/.ssh/RSP_id_rsa
+          chmod 600 ~/.ssh/config
+          ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan $REMOTE_SERVER >> ~/.ssh/known_hosts 2>/dev/null || true
+        else
+          echo "Remote transfer disabled. Will only process reports locally."
+        fi
 
       - echo "Creating reports directory"
       - mkdir -p reports
 
   build:
     commands:
-      - echo "Downloading scan results from S3 bucket: $ScanResultBucket"
-
+      - echo "Checking S3 bucket: $ScanResultBucket"
+      - aws s3 ls s3://$ScanResultBucket/ || echo "Unable to access bucket, but continuing"
+      
       # Download JSON files for each tool if available
       - for TOOL in kubescape trivy dependency-check; do
           echo "Checking for results in $TOOL folder";
-          if aws s3 ls s3://$ScanResultBucket/$TOOL/ --recursive | grep ".json$"; then
-            echo "Downloading JSON files for $TOOL";
-            aws s3 cp s3://$ScanResultBucket/$TOOL/ ./reports/$TOOL/ --recursive --exclude "*" --include "*.json";
+          mkdir -p ./reports/$TOOL;
+          if aws s3 ls s3://$ScanResultBucket/$TOOL/ 2>/dev/null; then
+            echo "Tool folder $TOOL exists in bucket";
+            aws s3 cp s3://$ScanResultBucket/$TOOL/ ./reports/$TOOL/ --recursive --exclude "*" --include "*.json" || echo "No files to copy for $TOOL";
           else
-            echo "No JSON files found for $TOOL";
+            echo "No folder for $TOOL in the bucket";
           fi
         done
 
-      - echo "Transferring and renaming files to remote server via jump host"
-      - for TOOL in kubescape trivy dependency-check; do
-          if [ -d "./reports/$TOOL" ]; then
-            for FILE in ./reports/$TOOL/*.json; do
-              if [ -s "$FILE" ]; then
-                TIMESTAMP=$(basename $(dirname "$FILE"))
-                FILENAME=$(basename "$FILE")
-                NEW_FILENAME="${TOOL}_${TIMESTAMP}_${FILENAME}"
-                echo "Transferring $FILE as $NEW_FILENAME"
-                scp "$FILE" inuser2@remote-host:/home/inuser/reports/"$NEW_FILENAME"
-              else
-                echo "Skipping empty file: $FILE"
-              fi
-            done
-          fi
-        done
-
-      - echo "Executing Python parser on remote server for each tool"
-      #- for TOOL in kubescape trivy dependency-check sonarqube; do
-          #ssh -o ProxyJump=user@$JUMP_HOST -i ~/.ssh/JHP_id_rsa user@$REMOTE_SERVER "
-          #  for FILE in /home/user/reports/${TOOL}_*.json; do
-           #   if [ -f \"$FILE\" ]; then
-           #     echo \"Processing $FILE with parser.py\"
-                #python3 /home/user/parser.py --input \"$FILE\" --tool $TOOL
-            #  else
-            #    echo \"No files to process for $TOOL\"
-             # fi
-            #done"
-        #done
+      # Count all downloaded files
+      - FILE_COUNT=$(find ./reports -type f -name "*.json" | wc -l)
+      - echo "Downloaded $FILE_COUNT report files"
+      
+      # Create a summary file with basic information
+      - echo "Creating summary report"
+      - |
+        cat > ./summary-report.json << EOF
+        {
+          "scanTime": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+          "filesProcessed": $FILE_COUNT,
+          "tools": {
+            "kubescape": $(find ./reports/kubescape -type f -name "*.json" | wc -l),
+            "trivy": $(find ./reports/trivy -type f -name "*.json" | wc -l),
+            "dependencyCheck": $(find ./reports/dependency-check -type f -name "*.json" | wc -l)
+          }
+        }
+        EOF
+      
+      # Transfer to remote server if enabled
+      - |
+        if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
+          echo "Transferring files to remote server"
+          
+          # Create the reports directory on remote server
+          ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} "mkdir -p /home/${REMOTE_USER}/reports" || echo "Failed to create remote directory"
+          
+          # Transfer and rename files to remote server
+          for TOOL in kubescape trivy dependency-check; do
+            if [ -d "./reports/$TOOL" ]; then
+              find ./reports/$TOOL -type f -name "*.json" | while read FILE; do
+                if [ -s "$FILE" ]; then
+                  DIRNAME=$(dirname "$FILE")
+                  TIMESTAMP=$(basename "$DIRNAME" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}" || echo "$(date +%Y-%m-%d-%H-%M)")
+                  FILENAME=$(basename "$FILE")
+                  NEW_FILENAME="${TOOL}_${TIMESTAMP}_${FILENAME}"
+                  echo "Transferring $FILE as $NEW_FILENAME"
+                  scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no "$FILE" ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/reports/"$NEW_FILENAME" || echo "Failed to transfer $FILE"
+                else
+                  echo "Skipping empty file: $FILE"
+                fi
+              done
+            fi
+          done
+          
+          # Transfer summary report
+          ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} ls -al /home/${REMOTE_USER}/reports/ 
+          #scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ./summary-report.json ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/reports/summary_$(date +%Y-%m-%d-%H-%M).json || echo "Failed to transfer summary report"
+          
+          ## Run parser if it exists
+          #ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} "
+          #  if [ -f /home/${REMOTE_USER}/parser.py ]; then
+          #    echo 'Running parser.py on uploaded files'
+          #    python3 /home/${REMOTE_USER}/parser.py
+          #  else
+          #    echo 'No parser.py found on remote server'
+          #  fi" || echo "Failed to execute remote command"
+          #else
+          # echo "Remote transfer disabled, skipping."
+          #fi
 
   post_build:
     commands:
-      - echo "Cleaning up SSH keys and known_hosts"
-      - rm -rf ~/.ssh/JHP_id_rsa
-      - rm -rf ~/.ssh/RSP_id_rsa
-      - rm -rf ~/.ssh/config
-      - rm -rf ~/.ssh/known_hosts
-      - echo "Build process completed successfully"
+      - echo "Uploading summary to S3"
+      - aws s3 cp ./summary-report.json s3://$ScanResultBucket/summary/$(date +%Y-%m-%d-%H-%M)-summary.json || echo "Failed to upload summary"
+      
+      # Clean up sensitive files only if we used SSH
+      - |
+        if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
+          echo "Cleaning up SSH keys and known_hosts"
+          rm -f ~/.ssh/JHP_id_rsa
+          rm -f ~/.ssh/RSP_id_rsa
+          rm -f ~/.ssh/config
+          rm -f ~/.ssh/known_hosts
+        fi
+      
+      - echo "Process completed successfully"
 
+artifacts:
+  files:
+    - summary-report.json
+  base-directory: .
