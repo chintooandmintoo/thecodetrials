@@ -22,6 +22,7 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
     SSH_CONFIG=$(aws ssm get-parameter --name /devsecops/SSH_CONFIG --with-decryption --query "Parameter.Value" --output text)
 
     # Configure SSH
+    echo $REMOTE_SERVER
     mkdir -p ~/.ssh
     echo "$JUMP_HOST_PrivateKey" > ~/.ssh/JHP_id_rsa
     cat ~/.ssh/JHP_id_rsa
@@ -70,6 +71,8 @@ EOF
 # Transfer to remote server if enabled
 if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
     echo "Transferring files to remote server"
+    echo "REMOTE_USER: " $REMOTE_USER
+    echo "REMOTE_HOST: " $REMOTE_SERVER 
     ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} "mkdir -p /home/${REMOTE_USER}/reports"
 
     # Transfer and rename files
