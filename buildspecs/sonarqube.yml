@@ -25,6 +25,8 @@ phases:
       - echo "Running SonarQube scan"
       - echo "Creating sonar-project.properties file"
       - echo "sonar.projectKey=devsecops-sonar" > sonar-project.properties
+      - SONARQUBE_TOKEN=$(aws ssm get-parameter --name /devsecops/sonarqube/token --with-decryption --query "Parameter.Value" --output text)
+      - SONARQUBE_HOST=$(aws ssm get-parameter --name /devsecops/sonarqube/host --with-decryption --query "Parameter.Value" --output text)
       - echo "sonar.projectName=DevSecOps Project" >> sonar-project.properties
       - echo "sonar.sources=WebGoat/src/main/java" >> sonar-project.properties
       - echo "sonar.java.binaries=WebGoat/target/classes" >> sonar-project.properties
