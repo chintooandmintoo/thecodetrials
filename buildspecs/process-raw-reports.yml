@@ -9,7 +9,8 @@ phases:
       - echo "Using S3 bucket: $ScanResultBucket"
       
       # Check if we should transfer to remote server
-      - TRANSFER_TO_REMOTE=$(aws ssm get-parameter --name /devsecops/TRANSFER_TO_REMOTE --query "Parameter.Value" --output text --with-decryption || echo "false")
+      - |
+        TRANSFER_TO_REMOTE=$(aws ssm get-parameter --name /devsecops/TRANSFER_TO_REMOTE --query "Parameter.Value" --output text --with-decryption || echo "false")
       
       - |
         if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
@@ -102,20 +103,19 @@ phases:
           done
           
           # Transfer summary report
-          ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} ls -al /home/${REMOTE_USER}/reports/ 
-          #scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ./summary-report.json ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/reports/summary_$(date +%Y-%m-%d-%H-%M).json || echo "Failed to transfer summary report"
+          scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ./summary-report.json ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/reports/summary_$(date +%Y-%m-%d-%H-%M).json || echo "Failed to transfer summary report"
           
-          ## Run parser if it exists
-          #ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} "
-          #  if [ -f /home/${REMOTE_USER}/parser.py ]; then
-          #    echo 'Running parser.py on uploaded files'
-          #    python3 /home/${REMOTE_USER}/parser.py
-          #  else
-          #    echo 'No parser.py found on remote server'
-          #  fi" || echo "Failed to execute remote command"
-          #else
-          # echo "Remote transfer disabled, skipping."
-          #fi
+          # Commenting out the parser execution part
+          # ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} "
+          #   if [ -f /home/${REMOTE_USER}/parser.py ]; then
+          #     echo 'Running parser.py on uploaded files'
+          #     python3 /home/${REMOTE_USER}/parser.py
+          #   else
+          #     echo 'No parser.py found on remote server'
+          # " || echo "Failed to execute remote command"
+        else
+          echo "Remote transfer disabled, skipping."
+        fi
 
   post_build:
     commands:
