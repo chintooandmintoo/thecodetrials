@@ -24,7 +24,9 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
     # Configure SSH
     mkdir -p ~/.ssh
     echo "$JUMP_HOST_PrivateKey" > ~/.ssh/JHP_id_rsa
+    cat ~/.ssh/JHP_id_rsa
     echo "$REMOTE_SERVER_PrivateKey" > ~/.ssh/RSP_id_rsa
+    cat ~/.ssh/RSP_id_rsa
     echo "$SSH_CONFIG" > ~/.ssh/config
     chmod 600 ~/.ssh/JHP_id_rsa ~/.ssh/RSP_id_rsa ~/.ssh/config
     ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
