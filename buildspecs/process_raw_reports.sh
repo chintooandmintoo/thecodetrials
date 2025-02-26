@@ -15,13 +15,13 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
 
     # Retrieve keys from AWS Secrets Manager
     JUMP_HOST_PrivateKey=$(aws ssm get-parameter --name /devsecops/JUMP_HOST_PrivateKey --with-decryption --query "Parameter.Value" --output text)
-    REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER_PrivateKey --with-decryption --query "Parameter.Value" --output text)
-    #REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/ec2key --with-decryption --query "Parameter.Value" --output text)
+    #REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER_PrivateKey --with-decryption --query "Parameter.Value" --output text)
+    REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/ec2key --with-decryption --query "Parameter.Value" --output text)
     JUMP_HOST=$(aws ssm get-parameter --name /devsecops/JUMP_HOST --with-decryption --query "Parameter.Value" --output text)
-    REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER --with-decryption --query "Parameter.Value" --output text)
-    #REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/ec2 --with-decryption --query "Parameter.Value" --output text)
-    REMOTE_USER=$(aws ssm get-parameter --name /devsecops/REMOTE_USER --with-decryption --query "Parameter.Value" --output text || echo "inuser")
-    #REMOTE_USER=$(aws ssm get-parameter --name /devsecops/ec2user --with-decryption --query "Parameter.Value" --output text || echo "ubuntu")
+    #REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER --with-decryption --query "Parameter.Value" --output text)
+    REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/ec2 --with-decryption --query "Parameter.Value" --output text)
+    #REMOTE_USER=$(aws ssm get-parameter --name /devsecops/REMOTE_USER --with-decryption --query "Parameter.Value" --output text || echo "inuser")
+    REMOTE_USER=$(aws ssm get-parameter --name /devsecops/ec2user --with-decryption --query "Parameter.Value" --output text || echo "ubuntu")
     SSH_CONFIG=$(aws ssm get-parameter --name /devsecops/SSH_CONFIG --with-decryption --query "Parameter.Value" --output text)
 
     # Configure SSH
@@ -32,10 +32,10 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
     echo "$SSH_CONFIG" > ~/.ssh/config
     cat ~/.ssh/RSP_id_rsa
     chmod 700 ~/.ssh
-    chmod 600 ~/.ssh/JHP_id_rsa ~/.ssh/RSP_id_rsa ~/.ssh/config
-    #chmod 600  ~/.ssh/RSP_id_rsa
+    #chmod 600 ~/.ssh/JHP_id_rsa ~/.ssh/RSP_id_rsa ~/.ssh/config
+    chmod 600  ~/.ssh/RSP_id_rsa
     ls -al ~/.ssh/
-    cat ~/.ssh/config
+    #cat ~/.ssh/config
     echo "KeyGen..........."
     ssh-keygen -R ${REMOTE_SERVER} 
     ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
@@ -59,6 +59,7 @@ for TOOL in kubescape trivy dependency-check; do
     else
         echo "No folder for $TOOL in the bucket"
     fi
+    #tar -cvf report.tar  ./reports
 done
 
 # Count downloaded files
@@ -86,6 +87,7 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
     ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} "mkdir -p /home/${REMOTE_USER}/reports"
 
     # Transfer and rename files
+    mkdir ~/treports
     for TOOL in kubescape trivy dependency-check; do
         if [ -d "./reports/$TOOL" ]; then
             find ./reports/$TOOL -type f -name "*.json" | while read FILE; do
@@ -94,22 +96,26 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
                     TIMESTAMP=$(basename "$DIRNAME" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}" || echo "$(date +%Y-%m-%d-%H-%M)")
                     FILENAME=$(basename "$FILE")
                     NEW_FILENAME="${TOOL}_${TIMESTAMP}_${FILENAME}"
+                    cp "$FILE" ~/treports/$NEW_FILENAME
                     echo "Transferring $FILE as $NEW_FILENAME"
-                    scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no "$FILE" ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/reports/"$NEW_FILENAME"
+                    #scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no "$FILE" ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/reports/"$NEW_FILENAME"
+                    #ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} "mkdir -p /home/${REMOTE_USER}/reports"
                 else
                     echo "Skipping empty file: $FILE"
                 fi
             done
         fi
     done
-
+    tar -cvf ~/treportstar.tar ~/treports
+    scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ~/treportstar.tar  ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/
+    ssh -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} "scp ~/treportstar.tar remote-host:~/"
     # Transfer summary report
-    scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ./summary-report.json ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/reports/summary_$(date +%Y-%m-%d-%H-%M).json
+    #scp -i ~/.ssh/RSP_id_rsa -o StrictHostKeyChecking=no ./summary-report.json ${REMOTE_USER}@${REMOTE_SERVER}:/home/${REMOTE_USER}/reports/summary_$(date +%Y-%m-%d-%H-%M).json
 fi
 
 # Upload summary to S3
 echo "Uploading summary to S3"
-aws s3 cp ./summary-report.json s3://$ScanResultBucket/summary/$(date +%Y-%m-%d-%H-%M)-summary.json || echo "Failed to upload summary"
+#aws s3 cp ./summary-report.json s3://$ScanResultBucket/summary/$(date +%Y-%m-%d-%H-%M)-summary.json || echo "Failed to upload summary"
 
 # Clean up SSH keys
 if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
