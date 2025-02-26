@@ -32,7 +32,8 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
     #echo "$SSH_CONFIG" > ~/.ssh/config
     cat ~/.ssh/RSP_id_rsa
     chmod 700 ~/.ssh
-    chmod 600 ~/.ssh/JHP_id_rsa ~/.ssh/RSP_id_rsa ~/.ssh/config
+    #chmod 600 ~/.ssh/JHP_id_rsa ~/.ssh/RSP_id_rsa ~/.ssh/config
+    chmod 600  ~/.ssh/RSP_id_rsa
     ls -al ~/.ssh/
     #cat ~/.ssh/config
     echo "KeyGen..........."
