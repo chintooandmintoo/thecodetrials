@@ -34,8 +34,10 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
     cat ~/.ssh/config
     echo "KeyGen..........."
     ssh-keygen -R ${REMOTE_SERVER} 
-    #ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
-    #ssh-keyscan $REMOTE_SERVER >> ~/.ssh/known_hosts 2>/dev/null || true
+    ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+    ssh-keyscan $REMOTE_SERVER >> ~/.ssh/known_hosts 2>/dev/null || true
+    cat ~/.ssh/known_hosts
+    
 else
     echo "Remote transfer disabled. Will only process reports locally."
 fi
