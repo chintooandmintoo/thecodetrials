@@ -15,28 +15,31 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
 
     # Retrieve keys from AWS Secrets Manager
     JUMP_HOST_PrivateKey=$(aws ssm get-parameter --name /devsecops/JUMP_HOST_PrivateKey --with-decryption --query "Parameter.Value" --output text)
-    REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER_PrivateKey --with-decryption --query "Parameter.Value" --output text)
+    #REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER_PrivateKey --with-decryption --query "Parameter.Value" --output text)
+    REMOTE_SERVER_PrivateKey=$(aws ssm get-parameter --name /devsecops/ec2key --with-decryption --query "Parameter.Value" --output text)
     JUMP_HOST=$(aws ssm get-parameter --name /devsecops/JUMP_HOST --with-decryption --query "Parameter.Value" --output text)
-    REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER --with-decryption --query "Parameter.Value" --output text)
-    REMOTE_USER=$(aws ssm get-parameter --name /devsecops/REMOTE_USER --with-decryption --query "Parameter.Value" --output text || echo "inuser")
+    #REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/REMOTE_SERVER --with-decryption --query "Parameter.Value" --output text)
+    REMOTE_SERVER=$(aws ssm get-parameter --name /devsecops/ec2 --with-decryption --query "Parameter.Value" --output text)
+    #REMOTE_USER=$(aws ssm get-parameter --name /devsecops/REMOTE_USER --with-decryption --query "Parameter.Value" --output text || echo "inuser")
+    REMOTE_USER=$(aws ssm get-parameter --name /devsecops/ec2user --with-decryption --query "Parameter.Value" --output text || echo "ubuntu")
     SSH_CONFIG=$(aws ssm get-parameter --name /devsecops/SSH_CONFIG --with-decryption --query "Parameter.Value" --output text)
 
     # Configure SSH
     echo $REMOTE_SERVER
     mkdir -p ~/.ssh
-    echo "$JUMP_HOST_PrivateKey" > ~/.ssh/JHP_id_rsa
+    #echo "$JUMP_HOST_PrivateKey" > ~/.ssh/JHP_id_rsa
     echo "$REMOTE_SERVER_PrivateKey" > ~/.ssh/RSP_id_rsa
-    echo "$SSH_CONFIG" > ~/.ssh/config
+    #echo "$SSH_CONFIG" > ~/.ssh/config
     cat ~/.ssh/RSP_id_rsa
     chmod 700 ~/.ssh
     chmod 600 ~/.ssh/JHP_id_rsa ~/.ssh/RSP_id_rsa ~/.ssh/config
     ls -al ~/.ssh/
-    cat ~/.ssh/config
+    #cat ~/.ssh/config
     echo "KeyGen..........."
     ssh-keygen -R ${REMOTE_SERVER} 
-    ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+    #ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
     ssh-keyscan $REMOTE_SERVER >> ~/.ssh/known_hosts 2>/dev/null || true
-    cat ~/.ssh/known_hosts
+    #cat ~/.ssh/known_hosts
     
 else
     echo "Remote transfer disabled. Will only process reports locally."
