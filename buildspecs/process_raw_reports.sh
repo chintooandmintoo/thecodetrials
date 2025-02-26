@@ -30,6 +30,8 @@ if [ "$TRANSFER_TO_REMOTE" = "true" ]; then
     cat ~/.ssh/RSP_id_rsa
     echo "$SSH_CONFIG" > ~/.ssh/config
     chmod 600 ~/.ssh/JHP_id_rsa ~/.ssh/RSP_id_rsa ~/.ssh/config
+    ls -al ~/.ssh/
+    cat ~/.ssh/config
     echo "KeyGen..........."
     ssh-keygen -R ${REMOTE_SERVER} 
     #ssh-keyscan $JUMP_HOST >> ~/.ssh/known_hosts 2>/dev/null || true
