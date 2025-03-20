@@ -1,0 +1,24 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "Installing dependencies for Secret Scanning"
+      - pip install trufflehog3
+
+  build:
+    commands:
+      - echo "Started scanning code repositories for vulnerabilities related to secret keys."
+      - |
+        trufflehog3 -f json -o truffelhog_output.json || true
+      - aws s3 cp truffelhog_output.json s3://$ARTIFACT_BUCKET/truffelhog_output.json 
+  post_build:
+    commands:
+      
+      - aws s3 cp truffelhog_output.json s3://${RESULTS_BUCKET}/trufflehog/truffelhog_output.json 
+        
+
+artifacts:
+  files:
+    - truffelhog_output.json
+  base-directory: .
