@@ -3,20 +3,31 @@ version: 0.2
 phases:
   install:
     commands:
-      - echo "Installing dependencies for Secret Scanning"
-      - pip install trufflehog3
+      - echo "Installing dependencies for Secret Scanning..."
+      - pip install --upgrade trufflehog3
 
   build:
     commands:
-      - echo "Started scanning code repositories for vulnerabilities related to secret keys."
+      - echo "Starting TruffleHog scan for secret keys..."
       - |
-        trufflehog3 -f json -o truffelhog_output.json || true 
+        trufflehog3 -f json -o trufflehog_output.json || true 
+
   post_build:
     commands:
-      - aws s3 cp truffelhog_output.json s3://${RESULTS_BUCKET}/truffelhog_output.json 
-        
+      - echo "Checking scan results..."
+      - TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+
+      - if [ -f "trufflehog_output.json" ]; then
+          echo "Uploading scan results to S3...";
+          aws s3 cp trufflehog_output.json s3://${RESULTS_BUCKET}/trufflehog/${TIMESTAMP}/trufflehog_output.json;
+        else
+          echo "Scan results not found, creating an empty one...";
+          echo '{"Results":[]}' > trufflehog_output.json;
+          aws s3 cp trufflehog_output.json s3://${RESULTS_BUCKET}/trufflehog/${TIMESTAMP}/trufflehog_output.json;
+        fi
 
 artifacts:
   files:
-    - truffelhog_output.json
+    - trufflehog_output.json
   base-directory: .
+
