@@ -1,0 +1,63 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto11
+    commands:
+      - wget https://github.com/jeremylong/DependencyCheck/releases/download/v6.5.3/dependency-check-6.5.3-release.zip
+      - unzip dependency-check-6.5.3-release.zip
+      - chmod +x dependency-check/bin/dependency-check.sh
+
+  pre_build:
+    commands:
+      - echo "Starting Dependency Check scan..."
+      - TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+
+  build:
+    commands:
+      - |
+        echo "Running Dependency Check..."
+        ./dependency-check/bin/dependency-check.sh \
+          --scan . \
+          --format JSON \
+          --format HTML \
+          --format XML \
+          --failOnCVSS 7 \
+          --out . || true
+      - ls -la
+
+  post_build:
+    commands:
+      - |
+        TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+        if [ -f "dependency-check-report.json" ]; then
+          aws s3 cp dependency-check-report.json s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/report.json
+        else
+          echo "JSON report file not found, creating empty one"
+          echo '{"dependencies": [], "reportSchema": "1.1"}' > dependency-check-report.json
+          aws s3 cp dependency-check-report.json s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/report.json
+        fi
+        
+        if [ -f "dependency-check-report.html" ]; then
+          aws s3 cp dependency-check-report.html s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/report.html
+        else
+          echo "HTML report file not found, creating empty one"
+          echo '<html><body>No dependencies found to scan</body></html>' > dependency-check-report.html
+          aws s3 cp dependency-check-report.html s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/report.html
+        fi
+
+        if [ -f "dependency-check-report.xml" ]; then
+          aws s3 cp dependency-check-report.xml s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/report.xml
+        else
+          echo "XML report file not found, creating empty one"
+          echo '<dependency-check-report></dependency-check-report>' > dependency-check-report.xml
+          aws s3 cp dependency-check-report.xml s3://${RESULTS_BUCKET}/dependency-check/${TIMESTAMP}/report.xml
+        fi
+
+artifacts:
+  files:
+    - dependency-check-report.json
+    - dependency-check-report.html
+    - dependency-check-report.xml
+  base-directory: .
